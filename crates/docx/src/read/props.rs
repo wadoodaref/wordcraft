@@ -4,9 +4,9 @@ use std::collections::HashMap;
 
 use wordcraft_doc::para::cap_alt;
 use wordcraft_doc::props::{
-    Align, Border, BorderStyle, Borders, CellProps, CharProps, CombineBrackets, EastAsianLayout, HeightRule, Highlight, LineSpacing, NumRef,
-    ParaProps, Rgb, RowProps, TabAlign, TabLeader, TabStop, TableFloat, TableLook, TableProps, TextColor, TextDirection, Underline, VAlign, VMerge,
-    VertAlign,
+    Align, Border, BorderStyle, Borders, CellProps, CharProps, CombineBrackets, EastAsianLayout, HeightRule, Highlight, JustifyStyle, LineSpacing,
+    NumRef, ParaProps, Rgb, RowProps, TabAlign, TabLeader, TabStop, TableFloat, TableLook, TableProps, TextColor, TextDirection, Underline, VAlign,
+    VMerge, VertAlign,
 };
 use wordcraft_doc::section::{
     Columns, DocGrid, DocGridType, LineNumberRestart, LineNumbering, MAX_CHAR_SPACE, MAX_GRID_PITCH, NotePos, NoteProps, NoteRestart, NumFormat,
@@ -417,7 +417,10 @@ impl PropCtx {
                         _ => {}
                     }
                 }
-                "w:jc" => p.align = k.attr("w:val").map(align),
+                "w:jc" => {
+                    p.align = k.attr("w:val").map(align);
+                    p.justify_style = k.attr("w:val").and_then(justify_style);
+                }
                 "w:outlineLvl" => p.outline_level = k.attr("w:val").and_then(u32_of).map(|v| v.min(9) as u8),
                 "w:rPr" => mark = self.rpr(k),
                 _ => {}
@@ -434,6 +437,18 @@ pub fn align(v: &str) -> Align {
         "both" | "justify" | "lowKashida" | "mediumKashida" | "highKashida" => Align::Justify,
         "distribute" | "thaiDistribute" => Align::Distribute,
         _ => Align::Left,
+    }
+}
+
+/// The kind of justification a `w:jc` value names, so it can be written back; `None` for plain
+/// justification and every other alignment.
+pub fn justify_style(v: &str) -> Option<JustifyStyle> {
+    match v {
+        "lowKashida" => Some(JustifyStyle::LowKashida),
+        "mediumKashida" => Some(JustifyStyle::MediumKashida),
+        "highKashida" => Some(JustifyStyle::HighKashida),
+        "thaiDistribute" => Some(JustifyStyle::Thai),
+        _ => None,
     }
 }
 

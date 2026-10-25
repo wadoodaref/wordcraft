@@ -1,8 +1,8 @@
 //! Property writers, in ECMA-376 schema element order.
 
 use wordcraft_doc::props::{
-    Align, Border, BorderStyle, Borders, CellProps, CharProps, EastAsianLayout, HeightRule, Highlight, LineSpacing, ParaProps, RowProps, TabAlign,
-    TabLeader, TableFloat, TableLook, TableProps, TextColor, VAlign, VMerge, VertAlign,
+    Align, Border, BorderStyle, Borders, CellProps, CharProps, EastAsianLayout, HeightRule, Highlight, JustifyStyle, LineSpacing, ParaProps,
+    RowProps, TabAlign, TabLeader, TableFloat, TableLook, TableProps, TextColor, VAlign, VMerge, VertAlign,
 };
 
 use crate::units::{n, twips};
@@ -192,6 +192,18 @@ pub fn align_val(a: Align) -> &'static str {
         Align::Right => "right",
         Align::Justify => "both",
         Align::Distribute => "distribute",
+    }
+}
+
+/// A paragraph's `w:jc`: the alignment, with the kind of justification it was read with (kashida,
+/// Thai distribution) kept. A kind that doesn't fit the alignment is ignored.
+pub fn para_jc_val(a: Align, style: Option<JustifyStyle>) -> &'static str {
+    match (a, style) {
+        (Align::Justify, Some(JustifyStyle::LowKashida)) => "lowKashida",
+        (Align::Justify, Some(JustifyStyle::MediumKashida)) => "mediumKashida",
+        (Align::Justify, Some(JustifyStyle::HighKashida)) => "highKashida",
+        (Align::Distribute, Some(JustifyStyle::Thai)) => "thaiDistribute",
+        _ => align_val(a),
     }
 }
 
@@ -407,7 +419,7 @@ pub fn ppr_inner(w: &mut W, p: &ParaProps, framed: bool, num_change: Option<&Cha
     toggle(w, "w:contextualSpacing", p.contextual_spacing);
     toggle(w, "w:mirrorIndents", p.mirror_indents);
     if let Some(a) = p.align {
-        w.val("w:jc", align_val(a));
+        w.val("w:jc", para_jc_val(a, p.justify_style));
     }
     if let Some(l) = p.outline_level {
         w.val("w:outlineLvl", &n(l.min(9) as i64));

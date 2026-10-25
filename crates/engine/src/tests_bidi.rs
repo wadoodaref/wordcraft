@@ -322,3 +322,26 @@ fn a_latin_link_inserted_into_reopened_hebrew_is_saved_left_to_right() {
     assert_eq!(s.typing_props().rtl, None);
     assert_eq!(s.typing_props().lang_bidi.as_deref(), Some("he-IL"), "the bidi language stays");
 }
+
+#[test]
+fn kashida_justification_stays_until_the_alignment_changes() {
+    // Kashida (`w:jc` lowKashida…) read from a document is kept while the paragraph stays
+    // justified: the Paragraph dialog's OK and an explicit Justify leave it. Choosing another
+    // alignment drops it, and justifying again is plain justification.
+    use wordcraft_doc::props::JustifyStyle;
+    let mut s = session("نص عربي مضبوط بالكشيدة", true);
+    run(&mut s, "para.set", json!({"props": {"align": "justify", "justifyStyle": "lowKashida"}}));
+    let kind = |s: &Session| (props(s, 0).align, props(s, 0).justify_style);
+    assert_eq!(kind(&s), (Some(Align::Justify), Some(JustifyStyle::LowKashida)));
+    run(&mut s, "para.set", json!({"props": {}, "onPage": {"align": "justify"}}));
+    assert_eq!(kind(&s), (Some(Align::Justify), Some(JustifyStyle::LowKashida)), "dialog OK, same alignment");
+    run(&mut s, "para.align", json!({"value": "justify"}));
+    assert_eq!(kind(&s), (Some(Align::Justify), Some(JustifyStyle::LowKashida)), "explicit same alignment");
+    run(&mut s, "para.alignCenter", json!({}));
+    assert_eq!(kind(&s), (Some(Align::Center), None), "another alignment drops the kind");
+    run(&mut s, "para.justify", json!({}));
+    assert_eq!(kind(&s), (Some(Align::Justify), None), "justifying again is plain justification");
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(kind(&s), (Some(Align::Justify), Some(JustifyStyle::LowKashida)), "undo brings it back");
+}
