@@ -121,6 +121,21 @@ impl TextAlignment {
     }
 }
 
+/// Which kind of justification a justified or distributed paragraph asks for (`w:jc`, ECMA-376
+/// §17.18.44): Arabic text can stretch its lines with kashida (tatweel) instead of wider spaces,
+/// in three intensities, and Thai text distributes differently from other scripts. Only
+/// meaningful while the alignment is `Justify` (the kashida kinds) or `Distribute` (`Thai`);
+/// kept so a document written with them is saved with them. Plain `both`/`distribute` is no kind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JustifyStyle {
+    LowKashida,
+    MediumKashida,
+    HighKashida,
+    /// `thaiDistribute`.
+    Thai,
+}
+
 /// Line spacing rule.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "rule", content = "value")]
@@ -383,6 +398,12 @@ pub struct ParaProps {
     pub style: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub align: Option<Align>,
+    /// The kind of justification `w:jc` named (kashida, Thai distribution); `None` is plain
+    /// (`both`, `distribute`). Part of the same attribute as `align`, so the two inherit together:
+    /// a layer that sets the alignment sets this too, even to `None`. A different alignment chosen
+    /// with [`ParaProps::set_align`] drops it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub justify_style: Option<JustifyStyle>,
     /// Left indent, points.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indent_left: Option<f32>,
@@ -509,7 +530,22 @@ pub struct ParaProps {
 }
 
 impl ParaProps {
+    /// Set the alignment. Choosing a different one drops the kind of justification read from the
+    /// document (kashida, Thai distribution); setting the same one again keeps it, so a dialog's
+    /// OK that doesn't touch the alignment doesn't lose it.
+    pub fn set_align(&mut self, a: Align) {
+        if self.align != Some(a) {
+            self.justify_style = None;
+        }
+        self.align = Some(a);
+    }
+
     pub fn overlay(&mut self, patch: &ParaProps) {
+        // `align` and `justify_style` are one `w:jc` value: a patch that sets the alignment also
+        // sets its kind, so an explicit `both` over an inherited `lowKashida` is plain.
+        if patch.align.is_some() || patch.justify_style.is_some() {
+            self.justify_style = patch.justify_style;
+        }
         self.overlay_layout(patch);
         self.overlay_pagination(patch);
         self.overlay_script_layout(patch);

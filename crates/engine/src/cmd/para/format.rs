@@ -37,14 +37,14 @@ pub(super) fn align(s: &mut Session, a: Align) -> CmdResult {
     let focus_rtl = r.bidi;
     fmt(s, &|p| {
         let rtl = p.bidi.unwrap_or(focus_rtl);
-        p.align = Some(target.map_or(Align::Left, |a| a.visual(rtl)));
+        p.set_align(target.map_or(Align::Left, |a| a.visual(rtl)));
     })
 }
 
 /// Set the alignment as seen on the page in every selected paragraph, in its own direction.
 pub(super) fn set_align(s: &mut Session, a: Align) -> CmdResult {
     let focus_rtl = cur(s).bidi;
-    fmt(s, &|p| p.align = Some(a.visual(p.bidi.unwrap_or(focus_rtl))))
+    fmt(s, &|p| p.set_align(a.visual(p.bidi.unwrap_or(focus_rtl))))
 }
 
 /// Paragraph reading order (Word's Right-to-Left / Left-to-Right Text Direction buttons). Only
@@ -134,7 +134,7 @@ pub(super) fn set_props(s: &mut Session, v: &Value) -> CmdResult {
             frame.anchor_lock = Some(anchor_lock);
         }
         if let Some(a) = align {
-            para.props.align = Some(a.visual(rtl));
+            para.props.set_align(a.visual(rtl));
         }
         let (start, end) = if rtl { (right, left) } else { (left, right) };
         if let Some(x) = start {

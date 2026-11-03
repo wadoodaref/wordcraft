@@ -47,8 +47,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 "justify" | "both" => Align::Justify,
                 "distribute" => Align::Distribute,
                 // Logical edges, whatever the paragraph's direction.
-                "start" => return fmt(s, &|p| p.align = Some(Align::Left)),
-                "end" => return fmt(s, &|p| p.align = Some(Align::Right)),
+                "start" => return fmt(s, &|p| p.set_align(Align::Left)),
+                "end" => return fmt(s, &|p| p.set_align(Align::Right)),
                 x => return Err(CmdError::Params(format!("unknown alignment `{x}`"))),
             };
             // An explicit value sets it (no toggling back to the start edge like the buttons).
