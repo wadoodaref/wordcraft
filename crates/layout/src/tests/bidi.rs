@@ -807,3 +807,22 @@ fn scripts_that_join_their_letters_are_told_apart() {
         assert!(!joins_cursively(c), "{c:?}");
     }
 }
+
+/// An RTL paragraph's mark and list label use complex-script font and formatting,
+/// matching Word's baseline and line height without unintended font inflation.
+#[test]
+fn rtl_paragraph_mark_and_list_label_use_complex_script() {
+    let mut d = doc_of(&[("مرحبا", true)]);
+    let lvl = wordcraft_doc::numbering::Level { text: "%1.".into(), ..Default::default() };
+    let num = Arc::make_mut(&mut d.numbering).try_add_levels(None, vec![lvl]).unwrap();
+    d.format_paragraphs(&Pos::body(0, 0), &Pos::body(0, 0), &|p: &mut ParaProps| {
+        p.bidi = Some(true);
+        p.numbering = Some(wordcraft_doc::props::NumRef { num, level: 0 });
+    })
+    .unwrap();
+    let l = lay(&d);
+    let (pl, _) = first_line(&l, 0);
+    let lab = pl.label.as_ref().expect("numbered label");
+    let lab_style = &pl.styles[lab.style as usize];
+    assert!(lab_style.rc.rtl || lab_style.rc.cs, "list label in an RTL paragraph inherits RTL/complex script formatting");
+}

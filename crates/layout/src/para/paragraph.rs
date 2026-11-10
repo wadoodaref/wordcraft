@@ -537,7 +537,11 @@ fn list_label(cx: &Cx, b: &mut Builder, mark_style: u32) -> Option<Label> {
     let break_only =
         b.clusters.iter().any(|c| c.kind == ClKind::PageBreak) && b.clusters.iter().all(|c| matches!(c.kind, ClKind::PageBreak | ClKind::Marker));
     let (text, lvl) = cx.env.label.as_ref().filter(|_| !break_only)?;
-    let rc = cx.res.char(&p.mark.clone().overlaid(&lvl.chr));
+    let mut chr = p.mark.clone().overlaid(&lvl.chr);
+    if rp.bidi && chr.rtl.is_none() {
+        chr.rtl = Some(true);
+    }
+    let rc = cx.res.char(&chr);
     // A bullet no installed font can draw would come from whatever icon font has its
     // private-use code (Font Awesome's Twitter logo at U+F081, #1683): it shows the level's
     // default bullet instead.
@@ -665,7 +669,10 @@ pub fn layout_para(p: &Paragraph, env: &ParaEnv) -> ParaLayout {
         Cx { p, env, rp: &rp, res, math_props: doc.settings.math.clone().unwrap_or_default(), drop_first: drop_cap_char(p, &rp), shown: None };
     cx.shown = shown_text(&cx);
     let mut sh = Shaped::new(b, env.eq_number);
-    let mark_rc = cx.res.char(&p.mark);
+    let mark_rc = {
+        let rc = cx.res.char(&p.mark);
+        if rc.rtl || rc.cs || (cx.rp.bidi && !matches!(p.mark.rtl, Some(false))) { Arc::new(rc.complex()) } else { rc }
+    };
     let mark_style = sh.b.style(&mark_rc, None, false);
     for (range, props) in p.run_ranges() {
         sh.run(&cx, range, props);
