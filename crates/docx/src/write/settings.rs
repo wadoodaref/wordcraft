@@ -241,11 +241,17 @@ pub(super) fn theme_xml(doc: &Document) -> Vec<u8> {
     }
     w.close("a:clrScheme");
     w.open("a:fontScheme", &[("name", name)]);
-    for (tag, face) in [("a:majorFont", &s.major_font), ("a:minorFont", &s.minor_font)] {
+    for (tag, face, ea, cs, scripts) in [
+        ("a:majorFont", &s.major_font, &s.major_ea, &s.major_cs, &s.major_scripts),
+        ("a:minorFont", &s.minor_font, &s.minor_ea, &s.minor_cs, &s.minor_scripts),
+    ] {
         w.open(tag, &[]);
         w.empty("a:latin", &[("typeface", face)]);
-        w.empty("a:ea", &[("typeface", "")]);
-        w.empty("a:cs", &[("typeface", "")]);
+        w.empty("a:ea", &[("typeface", ea)]);
+        w.empty("a:cs", &[("typeface", cs)]);
+        for (script, typeface) in scripts {
+            w.empty("a:font", &[("script", script), ("typeface", typeface)]);
+        }
         w.close(tag);
     }
     w.close("a:fontScheme");

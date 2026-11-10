@@ -271,12 +271,14 @@ impl PropCtx {
                     // Latin letters. A Normal style with only `w:eastAsia`/`w:cs` keeps the
                     // `docDefaults` font, and so does a hinted run, as in Word.
                     c.font = themed("w:asciiTheme").or_else(|| named("w:ascii")).or_else(|| themed("w:hAnsiTheme")).or_else(|| named("w:hAnsi"));
-                    // The complex-script font (Persian, Arabic, Hebrew text). A `w:cstheme` font is
-                    // left to inherit: the theme's per-script fonts aren't read.
-                    c.font_cs = k.attr("w:cs").filter(|f| !f.is_empty() && f.len() < 256).map(str::to_string);
-                    // The East Asian font (Chinese, Japanese, Korean text). A `w:eastAsiaTheme` font
-                    // is left to inherit, like `w:cstheme`.
-                    c.font_ea = k.attr("w:eastAsia").filter(|f| !f.is_empty() && f.len() < 256).map(str::to_string);
+                    c.font_theme = k.attr("w:asciiTheme").or_else(|| k.attr("w:hAnsiTheme")).filter(|f| !f.is_empty()).map(str::to_string);
+                    // The complex-script font (Persian, Arabic, Hebrew text).
+                    c.font_cs = k.attr("w:cs").filter(|f| !f.is_empty() && f.len() < 256).map(str::to_string).or_else(|| themed("w:cstheme"));
+                    c.font_cs_theme = k.attr("w:cstheme").filter(|f| !f.is_empty()).map(str::to_string);
+                    // The East Asian font (Chinese, Japanese, Korean text).
+                    c.font_ea =
+                        k.attr("w:eastAsia").filter(|f| !f.is_empty() && f.len() < 256).map(str::to_string).or_else(|| themed("w:eastAsiaTheme"));
+                    c.font_ea_theme = k.attr("w:eastAsiaTheme").filter(|f| !f.is_empty()).map(str::to_string);
                 }
                 "w:b" => c.bold = Some(on_off(k)),
                 "w:bCs" => c.bold_cs = Some(on_off(k)),
@@ -303,7 +305,10 @@ impl PropCtx {
                         (None, Some(v)) if v.eq_ignore_ascii_case("auto") => Some(TextColor::Auto),
                         (None, Some(v)) => Rgb::parse(v).map(TextColor::Rgb),
                         (None, None) => None,
-                    }
+                    };
+                    c.theme_color = k.attr("w:themeColor").filter(|v| !v.is_empty()).map(str::to_string);
+                    c.theme_tint = k.attr("w:themeTint").filter(|v| !v.is_empty()).map(str::to_string);
+                    c.theme_shade = k.attr("w:themeShade").filter(|v| !v.is_empty()).map(str::to_string);
                 }
                 "w:spacing" => c.spacing = tw(k, "w:val").map(|v| v.clamp(-1584.0, 1584.0)),
                 "w:w" => c.scale = k.attr("w:val").and_then(|v| measure(v.trim_end_matches('%'), 1.0)).map(|v| v.clamp(1.0, 600.0)),

@@ -235,6 +235,9 @@ pub struct CharProps {
     pub style: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<String>,
+    /// Theme font slot (`minorHAnsi`, `majorHAnsi`, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_theme: Option<String>,
     /// The symbol's own font (OOXML `w:sym/@w:font`, ECMA-376 §17.3.3.30), set on a symbol
     /// character from a `w:sym` or Insert › Symbol: it is shown in this font whatever `font` is,
     /// so changing the text's font keeps the symbol. `None` = the run's font.
@@ -257,6 +260,13 @@ pub struct CharProps {
     pub double_strike: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<TextColor>,
+    /// Theme colour slot (`text1`, `accent1`, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_tint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_shade: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlight: Option<Highlight>,
     /// Character shading (background fill).
@@ -325,10 +335,16 @@ pub struct CharProps {
     /// Complex-script font (Arabic, Persian, Hebrew…; OOXML `w:rFonts/@w:cs`). `None` = `font`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_cs: Option<String>,
+    /// Complex-script theme font slot (`minorBidi`, `majorBidi`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_cs_theme: Option<String>,
     /// East Asian font (Chinese, Japanese and Korean text; OOXML `w:rFonts/@w:eastAsia`). `None` =
     /// inherit, then `font`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_ea: Option<String>,
+    /// East Asian theme font slot (`minorEastAsia`, `majorEastAsia`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_ea_theme: Option<String>,
     /// Complex-script size, points (`w:szCs`). `None` leaves the inherited value unchanged.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size_cs: Option<f32>,
@@ -493,6 +509,7 @@ impl CharProps {
     /// overlaid on `base`.
     pub fn minus(mut self, base: &CharProps) -> CharProps {
         self.minus_text_style(base);
+        self.minus_theme_style(base);
         self.minus_run_visibility(base);
         self.minus_script_style(base);
         self.minus_document_marks(base);
@@ -504,12 +521,16 @@ impl CharProps {
             shading, border, vert_align, caps, small_caps, hidden, spacing, scale, position, kern, outline, shadow, emboss, engrave, lang, no_proof, rtl);
     }
 
+    fn minus_theme_style(&mut self, base: &CharProps) {
+        drop_same_fields!(self, base; font_theme, theme_color, theme_tint, theme_shade);
+    }
+
     fn minus_run_visibility(&mut self, base: &CharProps) {
         drop_same_fields!(self, base; web_hidden, snap_to_grid, emphasis);
     }
 
     fn minus_script_style(&mut self, base: &CharProps) {
-        drop_same_fields!(self, base; cs, font_cs, font_ea, size_cs, bold_cs, italic_cs, lang_bidi, lang_ea, east_asian_layout);
+        drop_same_fields!(self, base; cs, font_cs, font_cs_theme, font_ea, font_ea_theme, size_cs, bold_cs, italic_cs, lang_bidi, lang_ea, east_asian_layout);
     }
 
     fn minus_document_marks(&mut self, base: &CharProps) {
@@ -522,6 +543,7 @@ impl CharProps {
     /// format both scripts must set both values explicitly.
     pub fn overlay(&mut self, patch: &CharProps) {
         self.overlay_text_style(patch);
+        self.overlay_theme_style(patch);
         self.overlay_run_visibility(patch);
         self.overlay_script_style(patch);
         self.overlay_document_marks(patch);
@@ -535,11 +557,28 @@ impl CharProps {
             shading, border, vert_align, caps, small_caps, hidden, spacing, scale, position, kern, outline, shadow, emboss, engrave, lang, no_proof, rtl);
     }
 
+    fn overlay_theme_style(&mut self, patch: &CharProps) {
+        if patch.font.is_some() || patch.font_theme.is_some() {
+            self.font_theme = patch.font_theme.clone();
+        }
+        if patch.color.is_some() || patch.theme_color.is_some() {
+            self.theme_color = patch.theme_color.clone();
+            self.theme_tint = patch.theme_tint.clone();
+            self.theme_shade = patch.theme_shade.clone();
+        }
+    }
+
     fn overlay_run_visibility(&mut self, patch: &CharProps) {
         overlay_fields!(self, patch; web_hidden, snap_to_grid, emphasis);
     }
 
     fn overlay_script_style(&mut self, patch: &CharProps) {
+        if patch.font_cs.is_some() || patch.font_cs_theme.is_some() {
+            self.font_cs_theme = patch.font_cs_theme.clone();
+        }
+        if patch.font_ea.is_some() || patch.font_ea_theme.is_some() {
+            self.font_ea_theme = patch.font_ea_theme.clone();
+        }
         overlay_fields!(self, patch; cs, font_cs, font_ea, size_cs, bold_cs, italic_cs, lang_bidi, lang_ea, east_asian_layout);
     }
 

@@ -155,7 +155,7 @@ pub(crate) fn write_parts(doc: &Document, flavor: Flavor) -> Result<Vec<(String,
         &mut entries,
         &mut overrides,
         "word/theme/theme1.xml",
-        theme_xml(doc),
+        doc.passthrough.get(crate::package::THEME_ORIG).map(|o| o.to_vec()).unwrap_or_else(|| theme_xml(doc)),
         "application/vnd.openxmlformats-officedocument.theme+xml",
         PartRels::default(),
     );
