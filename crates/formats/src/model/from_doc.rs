@@ -153,6 +153,8 @@ fn extra_of(e: &CharProps) -> Option<Box<CharProps>> {
         italic_cs: e.italic_cs,
         lang_bidi: e.lang_bidi.clone().filter(|l| !l.is_empty()),
         lang_ea: e.lang_ea.clone().filter(|l| !l.is_empty()),
+        rtl: set(e.rtl),
+        cs: set(e.cs),
         ..Default::default()
     };
     (x != CharProps::default()).then(|| Box::new(x))
@@ -1147,6 +1149,7 @@ fn flow_table(doc: &Document, t: &Table, depth: usize, tracked: FlowOpts) -> FTa
             .collect::<Vec<_>>();
         super::types::TableExtra {
             align: t.props.align,
+            bidi_visual: t.props.bidi_visual,
             width: t.props.width,
             width_pct: t.props.width_pct,
             heights,

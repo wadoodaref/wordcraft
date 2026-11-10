@@ -767,3 +767,32 @@ fn hostile_style_sheets_never_panic() {
         let _ = parse_in(&format!("<style>{css}</style><p class='a é'>x</p><td style='width: 1e40px'>y</td>"), &|_| None, true);
     }
 }
+
+#[test]
+fn html_rtl_import() {
+    let html = r#"
+        <div dir="rtl" style="font-family: Arial">
+            <p>فقرة أولى</p>
+            <p style="direction: ltr; font-family: Calibri">English paragraph</p>
+        </div>
+        <p>عادي <span dir="rtl" style="font-family: Tahoma">كلمة</span></p>
+        <table dir="rtl">
+            <tr><td>خلية</td></tr>
+        </table>
+    "#;
+    let doc = crate::model::to_doc(&parse(html));
+    let p0 = doc.body[0].as_para().expect("expected paragraph");
+    assert_eq!(p0.props.bidi, Some(true));
+    assert_eq!(p0.mark.font_cs.as_deref(), Some("Arial"));
+    assert_eq!(p0.runs[0].props.font_cs.as_deref(), Some("Arial"));
+
+    let p1 = doc.body[1].as_para().expect("expected paragraph");
+    assert_ne!(p1.props.bidi, Some(true));
+
+    let p2 = doc.body[2].as_para().expect("expected paragraph");
+    assert_eq!(p2.runs[1].props.rtl, Some(true));
+    assert_eq!(p2.runs[1].props.font_cs.as_deref(), Some("Tahoma"));
+
+    let t = doc.body[3].as_table().expect("expected table");
+    assert!(t.props.bidi_visual);
+}

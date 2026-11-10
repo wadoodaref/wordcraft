@@ -127,6 +127,7 @@ pub(super) struct Output {
     pub(super) row_header: bool,
     pub(super) rule_pending: bool,
     pub(super) table_rights: Vec<Vec<i32>>,
+    pub(super) table_rtl: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -155,6 +156,7 @@ pub(super) struct St {
     pub(super) outline: Option<u8>,
     pub(super) pagebb: bool,
     pub(super) field: Option<usize>,
+    pub(super) rtl: Option<bool>,
     /// The code page of the current font's charset (`\fcharset`), when it names one.
     pub(super) cp: Option<u16>,
     /// Space before/after (`\sb`, `\sa`), line spacing (`\sl`, `\slmult`) and indents
@@ -192,6 +194,7 @@ impl Default for St {
             outline: None,
             pagebb: false,
             field: None,
+            rtl: None,
             cp: None,
             borders: Default::default(),
             border_side: None,

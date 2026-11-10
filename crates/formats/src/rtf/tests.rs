@@ -1827,3 +1827,35 @@ fn compound_borders_round_trip() {
     let back = import(export(&d).as_bytes()).unwrap();
     assert_eq!(tops(&back), want);
 }
+
+#[test]
+fn rtf_rtl_import() {
+    let rtf = br#"{\rtf1\ansi{\fonttbl{\f0 Arial;}{\f1 Times New Roman;}}
+\pard\rtlpar\f0 {\rtlch arabic}\par
+\pard\ltrpar\f1 English\par
+\trowd\rtlrow\cellx1000\cellx2000 \pard\intbl\rtlpar 1\cell 2\cell\row
+}"#;
+    let f = parse(rtf).unwrap();
+    let doc = crate::model::to_doc(&f);
+    let p0 = doc.body[0].as_para().expect("expected paragraph");
+    assert_eq!(p0.props.bidi, Some(true));
+    assert_eq!(p0.runs[0].props.rtl, Some(true));
+    assert_eq!(p0.runs[0].props.font_cs.as_deref(), Some("Arial"));
+
+    let p1 = doc.body[1].as_para().expect("expected paragraph");
+    assert_ne!(p1.props.bidi, Some(true));
+
+    let t = doc.body[2].as_table().expect("expected table");
+    assert!(t.props.bidi_visual);
+}
+
+#[test]
+fn rtf_rtldoc_import() {
+    let rtf = br#"{\rtf1\ansi\rtldoc{\fonttbl{\f0 Arial;}}
+\pard\f0 Arabic\par
+}"#;
+    let f = parse(rtf).unwrap();
+    let doc = crate::model::to_doc(&f);
+    let p0 = doc.body[0].as_para().expect("expected paragraph");
+    assert_eq!(p0.props.bidi, Some(true));
+}

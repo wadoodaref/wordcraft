@@ -937,6 +937,8 @@ pub struct FTable {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TableExtra {
     pub align: Option<wordcraft_doc::Align>,
+    /// Right-to-left table (`w:bidiVisual`, HTML `dir="rtl"`, RTF `\rtlrow`, ODT `rl-tb`).
+    pub bidi_visual: bool,
     /// Width, points.
     pub width: Option<f32>,
     /// Width, percent of the text width.

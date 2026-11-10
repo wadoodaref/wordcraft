@@ -94,6 +94,8 @@ pub(super) struct Reader {
     pub(super) in_creatim: bool,
     pub(super) rule_pending: bool,
     pub(super) info_depth: Option<usize>,
+    pub(super) table_rtl: Option<bool>,
+    pub(super) doc_rtl: bool,
     // Notes and comments (only when the caller wants them).
     pub(super) marks_on: bool,
     pub(super) sub: Option<Sub>,
@@ -131,6 +133,7 @@ impl Reader {
         std::mem::swap(&mut o.row_header, &mut self.row_header);
         std::mem::swap(&mut o.rule_pending, &mut self.rule_pending);
         std::mem::swap(&mut o.table_rights, &mut self.table_rights);
+        std::mem::swap(&mut o.table_rtl, &mut self.table_rtl);
         o
     }
 
@@ -522,8 +525,10 @@ impl Reader {
             let mut rows = std::mem::take(&mut self.table);
             let rights = std::mem::take(&mut self.table_rights);
             let widths = column_grid(&mut rows, &rights);
+            let is_rtl = self.table_rtl.take().unwrap_or(self.doc_rtl);
+            let extra = is_rtl.then(|| Box::new(model::TableExtra { bidi_visual: true, ..Default::default() }));
             // Word draws only the borders the cells name: no grid style, each cell its own.
-            self.body.push(FBlock::Table(FTable { rows, widths, borderless: true, extra: None, kept: None, wrap: None }));
+            self.body.push(FBlock::Table(FTable { rows, widths, borderless: true, extra, kept: None, wrap: None }));
         }
     }
 }

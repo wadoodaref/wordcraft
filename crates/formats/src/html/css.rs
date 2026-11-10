@@ -96,6 +96,7 @@ pub(super) fn apply_style(
     preserve: &mut bool,
     page_break: &mut bool,
     page_break_after: &mut bool,
+    rtl: &mut Option<bool>,
 ) {
     for (k, v) in decls(css) {
         let lv = v.to_ascii_lowercase();
@@ -161,6 +162,13 @@ pub(super) fn apply_style(
             "white-space" => *preserve = lv.starts_with("pre"),
             "page-break-before" | "break-before" => *page_break = lv == "always" || lv == "page",
             "page-break-after" | "break-after" => *page_break_after = lv == "always" || lv == "page",
+            "direction" => {
+                *rtl = match lv.as_str() {
+                    "rtl" => Some(true),
+                    "ltr" => Some(false),
+                    _ => *rtl,
+                };
+            }
             _ => {}
         }
     }

@@ -43,6 +43,8 @@ struct El {
     page_break_after: bool,
     /// Li: a paragraph of this item was already emitted.
     used: bool,
+    /// Right-to-left direction (HTML `dir="rtl"`, CSS `direction: rtl`).
+    rtl: Option<bool>,
 }
 
 struct TableB {
@@ -50,6 +52,8 @@ struct TableB {
     row: Option<Vec<Cell>>,
     /// The table or one of its cells asks for borders.
     bordered: bool,
+    /// Right-to-left table layout (`dir="rtl"`).
+    bidi_visual: bool,
 }
 
 struct ElementStyle {
@@ -58,6 +62,7 @@ struct ElementStyle {
     preserve: bool,
     page_break: bool,
     page_break_after: bool,
+    rtl: Option<bool>,
 }
 
 fn apply_font_attributes(attrs: &[(String, String)], fmt: &mut Fmt) {
@@ -650,6 +655,9 @@ impl<'r> Builder<'r> {
             }
             let pb_before = self.stack.iter_mut().rev().take_while(|e| e.kind != ElKind::Cell).any(|e| std::mem::take(&mut e.page_break));
             p.page_break = pb_before || std::mem::take(&mut self.pending_page_break);
+            if self.stack.iter().rev().find_map(|e| e.rtl) == Some(true) {
+                p.extra.get_or_insert_with(Default::default).bidi = Some(true);
+            }
             self.para = Some(p);
         }
         self.para.get_or_insert_with(Para::default)
@@ -851,7 +859,8 @@ impl<'r> Builder<'r> {
                     // Keep at most MAX_ROWS rows (the model drops the rest anyway): bounds the
                     // O(rows × rowspan) work of `insert_covered` on a table of millions of `<tr>`.
                     let rows: Vec<_> = t.rows.into_iter().filter(|r| !r.is_empty()).take(wordcraft_doc::table::MAX_ROWS).collect();
-                    let mut ft = FTable { rows, widths: Vec::new(), borderless, extra: None, kept: None, wrap: None };
+                    let extra = t.bidi_visual.then(|| Box::new(model::TableExtra { bidi_visual: true, ..Default::default() }));
+                    let mut ft = FTable { rows, widths: Vec::new(), borderless, extra, kept: None, wrap: None };
                     if !ft.rows.is_empty() {
                         ft.insert_covered();
                         // Columns keep the widths their cells give when every column has one.
@@ -1008,6 +1017,11 @@ impl<'r> Builder<'r> {
         let mut preserve = self.preserve();
         let mut page_break = false;
         let mut page_break_after = false;
+        let mut rtl = match attr(attrs, "dir").map(|d| d.to_ascii_lowercase()).as_deref() {
+            Some("rtl") => Some(true),
+            Some("ltr") => Some(false),
+            _ => None,
+        };
         match name {
             // A header cell is bold, as in browsers and Word, unless its own CSS says otherwise.
             "b" | "strong" | "th" => fmt.bold = true,
@@ -1049,11 +1063,26 @@ impl<'r> Builder<'r> {
             fmt.color.get_or_insert(wordcraft_doc::Rgb(0, 0, 0));
             fmt.size = PAGE_HEADING_SIZES.get(usize::from(n.clamp(1, 6)) - 1).copied();
         }
-        apply_style(css, &mut fmt, &mut align, &mut preserve, &mut page_break, &mut page_break_after);
+        apply_style(css, &mut fmt, &mut align, &mut preserve, &mut page_break, &mut page_break_after, &mut rtl);
+        let active_rtl = rtl.or_else(|| self.stack.iter().rev().find_map(|e| e.rtl));
+        if active_rtl == Some(true) {
+            let ex = fmt.extra.get_or_insert_with(Default::default);
+            ex.rtl = Some(true);
+            ex.cs = Some(true);
+            if let Some(font) = fmt.font.as_deref()
+                && ex.font_cs.is_none()
+            {
+                ex.font_cs = Some(font.to_string());
+            }
+        } else if active_rtl == Some(false) {
+            let ex = fmt.extra.get_or_insert_with(Default::default);
+            ex.rtl = Some(false);
+            ex.cs = Some(false);
+        }
         if kind == ElKind::Pre {
             preserve = true;
         }
-        ElementStyle { fmt, align, preserve, page_break, page_break_after }
+        ElementStyle { fmt, align, preserve, page_break, page_break_after, rtl }
     }
 
     pub(super) fn start(&mut self, name: &str, attrs: &[(String, String)], self_close: bool) {
@@ -1089,9 +1118,15 @@ impl<'r> Builder<'r> {
             self.flush();
         }
         let css = self.css_of(name, attrs);
-        let ElementStyle { mut fmt, align, preserve, page_break, page_break_after } = self.element_style(name, attrs, kind, &css);
+        let ElementStyle { mut fmt, align, preserve, page_break, page_break_after, rtl } = self.element_style(name, attrs, kind, &css);
+        let active_rtl = rtl.or_else(|| self.stack.iter().rev().find_map(|e| e.rtl));
         match kind {
-            ElKind::Table => self.tables.push(TableB { rows: Vec::new(), row: None, bordered: declares_border(attrs, &css, true) }),
+            ElKind::Table => self.tables.push(TableB {
+                rows: Vec::new(),
+                row: None,
+                bordered: declares_border(attrs, &css, true),
+                bidi_visual: active_rtl == Some(true),
+            }),
             ElKind::Tr => {
                 if let Some(t) = self.tables.last_mut()
                     && let Some(r) = t.row.take()
@@ -1153,7 +1188,19 @@ impl<'r> Builder<'r> {
         let spacing =
             if (kind != ElKind::Inline || self.page) && !matches!(name, "body" | "html") { block_spacing(&css) } else { Spacing::default() };
         let auto_margins = self.page && (name == "p" || matches!(kind, ElKind::Heading(_)));
-        self.stack.push(El { name: name.to_string(), kind, fmt, spacing, auto_margins, align, preserve, page_break, page_break_after, used: false });
+        self.stack.push(El {
+            name: name.to_string(),
+            kind,
+            fmt,
+            spacing,
+            auto_margins,
+            align,
+            preserve,
+            page_break,
+            page_break_after,
+            used: false,
+            rtl,
+        });
     }
 
     pub(super) fn end(&mut self, name: &str) {

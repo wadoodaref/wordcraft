@@ -94,6 +94,11 @@ impl WithExtra for CharProps {
         self.italic_cs = x.italic_cs;
         self.lang_bidi = name(&x.lang_bidi, 64);
         self.lang_ea = name(&x.lang_ea, 64);
+        self.rtl = x.rtl;
+        self.cs = x.cs;
+        if self.font_cs.is_none() && (self.rtl == Some(true) || self.cs == Some(true)) {
+            self.font_cs = self.font.clone();
+        }
         self
     }
 }
@@ -528,6 +533,9 @@ impl<'a> Builder<'a> {
     fn para(&mut self, p: &Para, list_num: Option<u32>) -> Paragraph {
         let mut out = Paragraph::new();
         out.props = para_props(p, list_num);
+        if out.props.bidi == Some(true) && out.mark.font_cs.is_none() {
+            out.mark.font_cs = out.mark.font.clone();
+        }
         if let Some(c) = &p.fmt_change {
             // A list item stays in its list instance (only its level may differ); an old list on a
             // paragraph that is no list now gets an instance of its own, so Reject can restore it.
@@ -551,6 +559,9 @@ impl<'a> Builder<'a> {
                 Inline::Text(t, f) => {
                     let t = clean_text(t);
                     let mut cp = self.budget(char_props(f));
+                    if out.props.bidi == Some(true) && cp.font_cs.is_none() {
+                        cp.font_cs = cp.font.clone();
+                    }
                     cp.ins = f.ins.as_ref().map(|m| self.revision(RevisionKind::Insert, m));
                     cp.del = f.del.as_ref().map(|m| self.revision(RevisionKind::Delete, m));
                     if let Some(c) = &f.fmt_change {
@@ -676,6 +687,10 @@ impl<'a> Builder<'a> {
         }
         out.mark.ins = p.mark_ins.as_deref().map(|m| self.revision(RevisionKind::Insert, m));
         out.mark.del = p.mark_del.as_deref().map(|m| self.revision(RevisionKind::Delete, m));
+        if out.props.bidi == Some(true) && out.mark.font_cs.is_none() {
+            out.mark.font_cs =
+                out.mark.font.clone().or_else(|| out.runs.last().and_then(|r| r.props.font_cs.clone().or_else(|| r.props.font.clone())));
+        }
         out.normalize();
         out.touch();
         // Its markup kept for the writer, as long as nothing changes the paragraph from here on
@@ -842,6 +857,7 @@ impl<'a> Builder<'a> {
         tb.rows.clear();
         if let Some(x) = &t.extra {
             tb.props.align = x.align;
+            tb.props.bidi_visual = x.bidi_visual;
             tb.props.width_pct = x.width_pct.filter(|p| p.is_finite() && *p > 0.0).map(|p| p.min(100.0));
             tb.props.width = x.width.filter(|w| w.is_finite() && *w > 0.0).map(|w| w.min(1584.0));
             tb.props.fixed |= x.fixed;

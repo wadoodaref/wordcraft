@@ -3,6 +3,34 @@ use super::styles::{StyleDef, is_char_format_word, is_format_word};
 use super::{Align, Fmt, Reader, VAlign, model};
 
 impl Reader {
+    fn rtl_word(&mut self, w: &str) -> bool {
+        match w {
+            "rtlpar" => self.st.rtl = Some(true),
+            "ltrpar" => self.st.rtl = Some(false),
+            "rtldoc" => self.doc_rtl = true,
+            "ltrdoc" => self.doc_rtl = false,
+            "rtlrow" => self.table_rtl = Some(true),
+            "ltrrow" => self.table_rtl = Some(false),
+            "rtlch" => {
+                let ex = self.st.fmt.extra.get_or_insert_with(Default::default);
+                ex.rtl = Some(true);
+                ex.cs = Some(true);
+                if let Some(font) = self.st.fmt.font.as_deref()
+                    && ex.font_cs.is_none()
+                {
+                    ex.font_cs = Some(font.to_string());
+                }
+            }
+            "ltrch" => {
+                let ex = self.st.fmt.extra.get_or_insert_with(Default::default);
+                ex.rtl = Some(false);
+                ex.cs = Some(false);
+            }
+            _ => return false,
+        }
+        true
+    }
+
     pub(super) fn word(&mut self, w: &str, p: Option<i32>, starred: bool, first_in_group: bool) {
         // Every control word ends a multibyte run: the code page it is read in may change here
         // (`\f`, `\fcharset`, `\cpg`, `\ansicpg`, `\pard`), and `\par` must see the text before it.
@@ -15,7 +43,7 @@ impl Reader {
         if w == "shppict" || self.start_header_footer_word(w) {
             return;
         }
-        if self.start_note_word(w) {
+        if self.start_note_word(w) || self.rtl_word(w) {
             return;
         }
         let dest = self.destination_for_word(w);
@@ -158,7 +186,13 @@ impl Reader {
                     }
                     Some(n) => {
                         self.st.fmt.code = false;
-                        self.st.fmt.font = Some(n);
+                        self.st.fmt.font = Some(n.clone());
+                        if let Some(ex) = &mut self.st.fmt.extra
+                            && (ex.rtl == Some(true) || ex.cs == Some(true))
+                            && ex.font_cs.is_none()
+                        {
+                            ex.font_cs = Some(n.to_string());
+                        }
                     }
                     None => {}
                 }
@@ -187,6 +221,7 @@ impl Reader {
                 self.defs.clear();
                 self.def_cur = CellDef::default();
                 self.row_header = false;
+                self.table_rtl = None;
             }
             "trhdr" => self.row_header = true,
             "clvmgf" => self.def_cur.vmerge = 1,

@@ -90,6 +90,9 @@ impl Reader {
         p.page_break = st.pagebb;
         p.spacing = spacing(st);
         p.borders = st.borders.any_visible().then_some(st.borders);
+        if st.rtl.unwrap_or(self.doc_rtl) {
+            p.extra.get_or_insert_with(Default::default).bidi = Some(true);
+        }
         if let Some(ls) = st.ls {
             let list = self.overrides.get(&ls).and_then(|id| self.lists.get(id));
             let lv = st.ilvl.min(8);
@@ -217,6 +220,14 @@ pub(super) fn is_format_word(w: &str) -> bool {
             | "fi"
             | "brdrw"
             | "brdrcf"
+            | "rtlpar"
+            | "ltrpar"
+            | "rtlrow"
+            | "ltrrow"
+            | "rtldoc"
+            | "ltrdoc"
+            | "rtlch"
+            | "ltrch"
     ) || (w.starts_with("ul") && w.len() <= 8)
         || w.starts_with("brdr")
 }
@@ -242,6 +253,8 @@ pub(super) fn is_char_format_word(w: &str) -> bool {
             | "chcbpat"
             | "cb"
             | "v"
+            | "rtlch"
+            | "ltrch"
     ) || (w.starts_with("ul") && w.len() <= 8)
 }
 

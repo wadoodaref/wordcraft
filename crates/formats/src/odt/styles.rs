@@ -662,6 +662,11 @@ fn style_child(name: &str, q: &str, a: &Attrs, s: &mut StyleInfo) -> bool {
                 Some("right") => Some(Align::Right),
                 _ => s.table_align,
             };
+            match get(a, "style:writing-mode").or_else(|| get(a, "loext:writing-mode")).map(str::trim) {
+                Some("rl-tb" | "rl" | "tb-rl") => s.rtl = Some(true),
+                Some("lr-tb" | "lr" | "tb-lr") => s.rtl = Some(false),
+                _ => {}
+            }
             if let Some(w) = get(a, "style:width").and_then(length).filter(|w| w.is_finite() && *w > 0.0) {
                 s.table_width = Some(w.min(MAX_LEN));
             }
@@ -1471,6 +1476,11 @@ impl Styles {
             chain.iter().find_map(|(_, s)| s.table_width),
             chain.iter().find_map(|(_, s)| s.table_rel_width),
         )
+    }
+
+    /// Whether the table style declares right-to-left text direction (`style:writing-mode="rl-tb"`).
+    pub(super) fn table_rtl(&self, name: &str) -> Option<bool> {
+        self.chain(name).iter().find_map(|(_, s)| s.rtl)
     }
 
     /// A table style's own space above and below (points; each side from the nearest style in
