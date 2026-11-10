@@ -21,25 +21,59 @@ fn round(v: f32) -> i64 {
     v.round().clamp(-1e9, 1e9) as i64
 }
 
+fn write_rfonts(w: &mut W, c: &CharProps) {
+    let mut fonts: Vec<(&str, &str)> = Vec::new();
+    if let Some(f) = &c.font {
+        fonts.extend([("w:ascii", f.as_str()), ("w:hAnsi", f.as_str())]);
+    }
+    if let Some(t) = &c.font_theme {
+        fonts.extend([("w:asciiTheme", t.as_str()), ("w:hAnsiTheme", t.as_str())]);
+    }
+    if let Some(ea) = &c.font_ea {
+        fonts.push(("w:eastAsia", ea));
+    }
+    if let Some(t) = &c.font_ea_theme {
+        fonts.push(("w:eastAsiaTheme", t.as_str()));
+    }
+    if let Some(cs) = &c.font_cs {
+        fonts.push(("w:cs", cs));
+    }
+    if let Some(t) = &c.font_cs_theme {
+        fonts.push(("w:cstheme", t.as_str()));
+    }
+    if !fonts.is_empty() {
+        w.empty("w:rFonts", &fonts);
+    }
+}
+
+fn write_rcolor(w: &mut W, c: &CharProps) {
+    match c.color {
+        Some(TextColor::Auto) => w.val("w:color", "auto"),
+        Some(TextColor::Rgb(rgb)) => {
+            let hex = rgb.hex();
+            let mut attrs: Vec<(&str, &str)> = vec![("w:val", hex.as_str())];
+            if let Some(tc) = &c.theme_color {
+                attrs.push(("w:themeColor", tc.as_str()));
+            }
+            if let Some(tt) = &c.theme_tint {
+                attrs.push(("w:themeTint", tt.as_str()));
+            }
+            if let Some(ts) = &c.theme_shade {
+                attrs.push(("w:themeShade", ts.as_str()));
+            }
+            w.empty("w:color", &attrs);
+        }
+        None => {}
+    }
+}
+
 /// `w:rPr` content (without the wrapper). Link and revision marks are not run properties.
 pub fn rpr_inner(w: &mut W, c: &CharProps) {
     if let Some(s) = &c.style {
         w.val("w:rStyle", s);
     }
     // Emit only explicit properties so absent values keep inheriting from the style chain.
-    let mut fonts: Vec<(&str, &str)> = Vec::new();
-    if let Some(f) = &c.font {
-        fonts.extend([("w:ascii", f.as_str()), ("w:hAnsi", f.as_str())]);
-    }
-    if let Some(ea) = &c.font_ea {
-        fonts.push(("w:eastAsia", ea));
-    }
-    if let Some(cs) = &c.font_cs {
-        fonts.push(("w:cs", cs));
-    }
-    if !fonts.is_empty() {
-        w.empty("w:rFonts", &fonts);
-    }
+    write_rfonts(w, c);
     toggle(w, "w:b", c.bold);
     toggle(w, "w:bCs", c.bold_cs);
     toggle(w, "w:i", c.italic);
@@ -56,11 +90,7 @@ pub fn rpr_inner(w: &mut W, c: &CharProps) {
     toggle(w, "w:snapToGrid", c.snap_to_grid);
     toggle(w, "w:vanish", c.hidden);
     toggle(w, "w:webHidden", c.web_hidden);
-    match c.color {
-        Some(TextColor::Auto) => w.val("w:color", "auto"),
-        Some(TextColor::Rgb(rgb)) => w.val("w:color", &rgb.hex()),
-        None => {}
-    }
+    write_rcolor(w, c);
     if let Some(s) = c.spacing {
         w.val("w:spacing", &twips(s.clamp(-1584.0, 1584.0)));
     }

@@ -112,6 +112,8 @@ pub const CUSTOM_XML_ROOTS: &str = "wordcraft:customXml.roots";
 /// The original `word/settings.xml` when it holds settings the model doesn't (merged into on
 /// save by `write::settings_merge`). Not a package part: WordCraft's own bookkeeping.
 pub const SETTINGS_ORIG: &str = "wordcraft:settings.orig";
+/// The original `word/theme/theme1.xml` when read, kept on save so per-script fonts and formatting schemes are not lost.
+pub const THEME_ORIG: &str = "wordcraft:theme.orig";
 /// Extended properties (`docProps/app.xml`) the model doesn't hold but a save keeps
 /// ([`APP_KEPT_PROPS`]): `name\tvalue` lines. Not a package part: WordCraft's own bookkeeping.
 pub const APP_KEPT: &str = "wordcraft:app.kept";

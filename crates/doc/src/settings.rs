@@ -95,6 +95,18 @@ pub struct Settings {
     /// Theme fonts (major = headings, minor = body).
     pub major_font: String,
     pub minor_font: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub major_scripts: Vec<(String, String)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub minor_scripts: Vec<(String, String)>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub major_cs: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub minor_cs: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub major_ea: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub minor_ea: String,
     /// Theme colours: dk1 lt1 dk2 lt2 accent1..6 hlink folHlink.
     pub theme_colors: Vec<Rgb>,
     pub theme_name: String,
@@ -305,6 +317,12 @@ impl Default for Settings {
             watermark: None,
             major_font: styles::HEADING_FONT.into(),
             minor_font: styles::BODY_FONT.into(),
+            major_scripts: Vec::new(),
+            minor_scripts: Vec::new(),
+            major_cs: String::new(),
+            minor_cs: String::new(),
+            major_ea: String::new(),
+            minor_ea: String::new(),
             theme_colors: THEME_COLORS.to_vec(),
             theme_name: "Craft".into(),
             footnote_format: section::NumFormat::Decimal,

@@ -133,6 +133,12 @@ fn every_char_prop_round_trips() {
         italic_cs: Some(true),
         lang_bidi: Some("fa-IR".into()),
         lang_ea: Some("ja-JP".into()),
+        font_theme: None,
+        font_cs_theme: None,
+        font_ea_theme: None,
+        theme_color: None,
+        theme_tint: None,
+        theme_shade: None,
         east_asian_layout: Some(wordcraft_doc::props::EastAsianLayout {
             id: Some(3),
             combine: Some(true),
@@ -2842,4 +2848,45 @@ fn drop_cap_options_round_trip() {
         (b.props.drop_cap, b.props.drop_cap_margin, b.props.drop_cap_distance, b.props.drop_cap_font.as_deref()),
         (Some(4), Some(true), None, None)
     );
+}
+
+/// Theme fonts (w:asciiTheme, w:cstheme) and theme colors (w:themeColor, w:themeShade, w:themeTint) round-trip.
+#[test]
+fn theme_fonts_and_colors_round_trip() {
+    let chr = CharProps {
+        font: Some("Calibri".into()),
+        font_theme: Some("minorHAnsi".into()),
+        font_cs: Some("Times New Roman".into()),
+        font_cs_theme: Some("minorBidi".into()),
+        color: Some(TextColor::Rgb(Rgb(0x2F, 0x54, 0x96))),
+        theme_color: Some("accent1".into()),
+        theme_shade: Some("BF".into()),
+        ..Default::default()
+    };
+
+    let p = Paragraph::with_text("Theme styled text", chr);
+    let mut d = doc_with(vec![p]);
+    d.settings.major_scripts = vec![("Arab".into(), "Times New Roman".into())];
+    d.settings.minor_scripts = vec![("Arab".into(), "Times New Roman".into())];
+
+    let bytes = wordcraft_docx::write(&d).expect("write");
+    let mut z = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
+    let mut doc_xml = String::new();
+    std::io::Read::read_to_string(&mut z.by_name("word/document.xml").unwrap(), &mut doc_xml).unwrap();
+    assert!(doc_xml.contains(r#"w:asciiTheme="minorHAnsi""#), "asciiTheme in doc: {doc_xml}");
+    assert!(doc_xml.contains(r#"w:cstheme="minorBidi""#), "cstheme in doc: {doc_xml}");
+    assert!(doc_xml.contains(r#"w:themeColor="accent1""#), "themeColor in doc: {doc_xml}");
+    assert!(doc_xml.contains(r#"w:themeShade="BF""#), "themeShade in doc: {doc_xml}");
+
+    let mut theme_xml = String::new();
+    std::io::Read::read_to_string(&mut z.by_name("word/theme/theme1.xml").unwrap(), &mut theme_xml).unwrap();
+    assert!(theme_xml.contains(r#"<a:font script="Arab" typeface="Times New Roman"/>"#), "Arabic script font in theme: {theme_xml}");
+
+    let r = wordcraft_docx::read(&bytes).expect("read");
+    let got = paras(&r);
+    let run = &got[0].runs[0];
+    assert_eq!(run.props.font_theme.as_deref(), Some("minorHAnsi"));
+    assert_eq!(run.props.font_cs_theme.as_deref(), Some("minorBidi"));
+    assert_eq!(run.props.theme_color.as_deref(), Some("accent1"));
+    assert_eq!(run.props.theme_shade.as_deref(), Some("BF"));
 }

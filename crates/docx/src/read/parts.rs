@@ -178,6 +178,16 @@ impl Reader<'_> {
     }
 
     pub(super) fn read_theme(&mut self, path: &str) {
+        if let Some(b) = self.pkg.get(path) {
+            let normalized = if !b.starts_with(b"<?xml") {
+                let mut v = b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n".to_vec();
+                v.extend_from_slice(b);
+                v
+            } else {
+                b.to_vec()
+            };
+            self.doc.passthrough.insert(crate::package::THEME_ORIG.into(), Arc::new(normalized));
+        }
         let Ok(Some(t)) = self.xml(path) else { return };
         if let Some(n) = t.attr("name").filter(|n| !n.is_empty()) {
             self.doc.settings.theme_name = n.to_string();
@@ -211,9 +221,14 @@ impl Reader<'_> {
             if let Some(f) = face("a:minorFont") {
                 self.doc.settings.minor_font = f;
             }
+            let ea = |n: &str| fs.child(n).and_then(|f| f.child("a:ea")).and_then(|c| c.attr("typeface")).unwrap_or_default().to_string();
             let cs = |n: &str| fs.child(n).and_then(|f| f.child("a:cs")).and_then(|c| c.attr("typeface")).unwrap_or_default().to_string();
             self.pc.major_cs = cs("a:majorFont");
             self.pc.minor_cs = cs("a:minorFont");
+            self.doc.settings.major_cs = self.pc.major_cs.clone();
+            self.doc.settings.minor_cs = self.pc.minor_cs.clone();
+            self.doc.settings.major_ea = ea("a:majorFont");
+            self.doc.settings.minor_ea = ea("a:minorFont");
             // Per-script fonts (`a:font script="Arab"`); Office's themes list about 30.
             let scripts = |n: &str| -> Vec<(String, String)> {
                 let Some(f) = fs.child(n) else { return Vec::new() };
@@ -227,6 +242,8 @@ impl Reader<'_> {
             };
             self.pc.major_scripts = scripts("a:majorFont");
             self.pc.minor_scripts = scripts("a:minorFont");
+            self.doc.settings.major_scripts = self.pc.major_scripts.clone();
+            self.doc.settings.minor_scripts = self.pc.minor_scripts.clone();
         }
         self.pc.major_font = self.doc.settings.major_font.clone();
         self.pc.minor_font = self.doc.settings.minor_font.clone();
