@@ -561,9 +561,15 @@ fn prepare_view(app: &mut WordApp, ui: &Ui, full: Rect, layout: &DocLayout) -> C
         && !read_mode
         && crate::chrome::Screen::of(&app.session.view) == crate::chrome::Screen::Normal;
     let (hruler, vruler, area) = if show_ruler {
-        let h = Rect::from_min_max(pos2(full.min.x + RULER, full.min.y), pos2(full.max.x, full.min.y + RULER));
-        let v = Rect::from_min_max(pos2(full.min.x, full.min.y + RULER), pos2(full.min.x + RULER, full.max.y));
-        (Some(h), Some(v), Rect::from_min_max(pos2(full.min.x + RULER, full.min.y + RULER), full.max))
+        if crate::rtl::on() {
+            let h = Rect::from_min_max(pos2(full.min.x, full.min.y), pos2(full.max.x - RULER, full.min.y + RULER));
+            let v = Rect::from_min_max(pos2(full.max.x - RULER, full.min.y + RULER), pos2(full.max.x, full.max.y));
+            (Some(h), Some(v), Rect::from_min_max(pos2(full.min.x, full.min.y + RULER), pos2(full.max.x - RULER, full.max.y)))
+        } else {
+            let h = Rect::from_min_max(pos2(full.min.x + RULER, full.min.y), pos2(full.max.x, full.min.y + RULER));
+            let v = Rect::from_min_max(pos2(full.min.x, full.min.y + RULER), pos2(full.min.x + RULER, full.max.y));
+            (Some(h), Some(v), Rect::from_min_max(pos2(full.min.x + RULER, full.min.y + RULER), full.max))
+        }
     } else {
         (None, None, full)
     };

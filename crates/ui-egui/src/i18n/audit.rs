@@ -678,6 +678,11 @@ fn the_arabic_interface_is_mirrored_and_never_panics() {
     let drawn = frame_at(&ctx, &mut app, 1600.0);
     assert!(x_of(&drawn, "Navigation") > 1300.0);
     let _ = app.run("view.navigationPane", json!({"value": false}));
+    // Ruler is mirrored: with ruler enabled in Arabic UI, vertical ruler moves to the right edge.
+    let _ = app.run("view.ruler", json!({"value": true}));
+    let _ = frame_at(&ctx, &mut app, 1600.0);
+    assert!(app.canvas.canvas_rect.is_some_and(|r| r.min.x <= 1.0 && r.max.x < 1600.0));
+    let _ = app.run("view.ruler", json!({"value": false}));
     // English stays as it was.
     {
         let ctx = egui::Context::default();
