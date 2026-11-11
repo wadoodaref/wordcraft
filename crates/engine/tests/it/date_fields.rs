@@ -88,6 +88,28 @@ fn a_locked_date_field_keeps_its_stored_result() {
 }
 
 #[test]
+fn unlocked_hijri_date_fields_are_refreshed_on_open() {
+    let d = open_body(&format!(
+        "<w:p>{}</w:p><w:p>{}</w:p><w:p>{}</w:p>",
+        field(r#"DATE \h"#, "2020-01-01", false),
+        field(r#"DATE \@ "dd/MM/yyyy" \h"#, "01/01/2020", false),
+        field(r#"DATE \@ "d MMMM yyyy" \h"#, "1 January 2020", false),
+    ));
+    let got = fields(&d);
+    assert_eq!(got.len(), 3);
+    assert_eq!(got[0].1, wordcraft_engine::cmd::insert::format_date_hijri("M/d/yyyy", false));
+    assert_eq!(got[1].1, wordcraft_engine::cmd::insert::format_date_hijri("dd/MM/yyyy", false));
+    assert_eq!(got[2].1, wordcraft_engine::cmd::insert::format_date_hijri("d MMMM yyyy", false));
+    assert_ne!(got[0].1, "2020-01-01");
+}
+
+#[test]
+fn a_locked_hijri_date_field_keeps_its_stored_result() {
+    let d = open_body(&format!("<w:p>{}</w:p>", field(r#"DATE \@ "dd/MM/yyyy" \h"#, "01/06/1448", true)));
+    assert_eq!(fields(&d)[0].1, "01/06/1448");
+}
+
+#[test]
 fn other_date_fields_keep_their_stored_result() {
     // These record when something happened; they are not "now", and Word does not refresh them
     // on open either. Nor is any other field touched.

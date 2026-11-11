@@ -43,13 +43,19 @@ pub(super) fn page_number(s: &mut Session, v: &Value) -> CmdResult {
 
 pub(super) fn date_time(s: &mut Session, v: &Value) -> CmdResult {
     let fmt = p::str(v, "format").unwrap_or("M/d/yyyy");
-    let text = format_date(fmt);
+    let hijri = p::bool(v, "hijri").unwrap_or(false);
+    let lang = s.editing_lang.as_deref().or(s.prefs.default_language.as_deref());
+    let is_ar = s.doc.para(s.sel.focus.story, &s.sel.focus.path).is_some_and(|p| p.props.bidi == Some(true))
+        || lang.is_some_and(|l| l.starts_with("ar"))
+        || fmt.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
+    let text = if hijri { format_date_hijri(fmt, is_ar) } else { format_date(fmt) };
     if p::bool(v, "update").unwrap_or(false) {
         let props = s.typing_props();
         let at = delete_selection(s)?;
+        let instr = if hijri { format!("DATE \\@ \"{fmt}\" \\h") } else { format!("DATE \\@ \"{fmt}\"") };
         let end = s.doc.insert_object(
             &at,
-            InlineObject::Field { instr: format!("DATE \\@ \"{fmt}\""), result: text, locked: false, dirty: false, code: false, form: String::new() },
+            InlineObject::Field { instr, result: text, locked: false, dirty: false, code: false, form: String::new() },
             &props,
         )?;
         s.sel = Selection::caret(end);
@@ -58,6 +64,32 @@ pub(super) fn date_time(s: &mut Session, v: &Value) -> CmdResult {
     }
     sel_result(s)
 }
+
+/// Month names in the tabular Islamic (Hijri) calendar, in Arabic.
+pub const HIJRI_MONTHS_AR: [&str; 12] =
+    ["المحرم", "صفر", "ربيع الأول", "ربيع الآخر", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+
+/// Month names in the tabular Islamic (Hijri) calendar, transliterated for English Word fields.
+pub const HIJRI_MONTHS_EN: [&str; 12] = [
+    "Muharram",
+    "Safar",
+    "Rabi I",
+    "Rabi II",
+    "Jamada El Oula",
+    "Jamada El Thaniah",
+    "Rajab",
+    "Sha'ban",
+    "Ramadan",
+    "Shawwal",
+    "Thu El Keada",
+    "Thu El Hegga",
+];
+
+/// Weekday names in Arabic (starting with Thursday to align with days_since 1970-01-01 % 7).
+pub const DAYS_AR: [&str; 7] = ["الخميس", "الجمعة", "السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء"];
+
+/// Weekday names in English (starting with Thursday to align with days_since 1970-01-01 % 7).
+pub const DAYS_EN: [&str; 7] = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
 
 /// Format today's date with a Word picture (`M/d/yyyy`, `MMMM d, yyyy`, `yyyy-MM-dd`, `dddd`…).
 pub fn format_date(fmt: &str) -> String {
@@ -73,13 +105,60 @@ pub fn format_date_at(fmt: &str, unix: u64, offset_secs: i64) -> String {
     format_date_parts(fmt, y, m as usize, d, hms, days)
 }
 
+/// Format today's date in the tabular Islamic (Hijri) calendar with a Word picture (`DATE \h`).
+pub fn format_date_hijri(fmt: &str, arabic: bool) -> String {
+    let now = crate::cmd::now_unix();
+    format_date_at_hijri(fmt, now, crate::cmd::local_offset_secs(now), arabic)
+}
+
+/// Format the instant `unix` in the tabular Islamic (Hijri) calendar in the local zone `offset_secs` east of UTC.
+pub fn format_date_at_hijri(fmt: &str, unix: u64, offset_secs: i64, arabic: bool) -> String {
+    let (_gy, _gm, _gd, hms, days) = crate::cmd::local_civil(unix, offset_secs);
+    let (hy, hm, hd) = hijri_from_days(days);
+    format_date_hijri_parts(fmt, hy, hm, hd, hms, days, arabic)
+}
+
+/// Tabular Islamic (Hijri) date conversion from days since 1970-01-01.
+///
+/// Matches Microsoft Word, Windows NLS, and ECMA-376 Part 1 §17.16.5.15 (`DATE \h`).
+pub fn hijri_from_days(days: i64) -> (i64, usize, u32) {
+    let jd = 2_440_588 + days;
+    let l = jd - 1_948_439 + 10_632;
+    let n = (l - 1) / 10_631;
+    let l = l - 10_631 * n + 354;
+    let j = ((10_985 - l) / 5_316) * ((50 * l) / 17_719) + (l / 5_670) * ((43 * l) / 15_238);
+    let l = l - ((30 - j) / 15) * ((17_719 * j) / 50) - (j / 16) * ((15_238 * j) / 43) + 29;
+    let hm = (24 * l) / 709;
+    let hd = l - (709 * hm) / 24;
+    let hy = 30 * n + j - 30;
+    (hy, hm as usize, hd as u32)
+}
+
 /// Format a date and time with a Word picture; `days_since` (days since 1970-01-01) gives the weekday.
 pub fn format_date_parts(fmt: &str, y: i64, m: usize, d: u32, (hh, mm, ss): (u32, u32, u32), days_since: i64) -> String {
     const MONTHS: [&str; 12] =
         ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const DAYS: [&str; 7] = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday"];
     let month = MONTHS.get(m.saturating_sub(1)).copied().unwrap_or("January");
-    let day = DAYS.get(days_since.rem_euclid(7) as usize).copied().unwrap_or("Monday");
+    let day = DAYS_EN.get(days_since.rem_euclid(7) as usize).copied().unwrap_or("Monday");
+    format_date_tokens(fmt, (y, m, d), (hh, mm, ss), month, day, false)
+}
+
+/// Format a Hijri date and time with a Word picture.
+pub fn format_date_hijri_parts(fmt: &str, hy: i64, hm: usize, hd: u32, (hh, mm, ss): (u32, u32, u32), days_since: i64, arabic: bool) -> String {
+    let month = if arabic {
+        HIJRI_MONTHS_AR.get(hm.saturating_sub(1)).copied().unwrap_or("المحرم")
+    } else {
+        HIJRI_MONTHS_EN.get(hm.saturating_sub(1)).copied().unwrap_or("Muharram")
+    };
+    let day = if arabic {
+        DAYS_AR.get(days_since.rem_euclid(7) as usize).copied().unwrap_or("الإثنين")
+    } else {
+        DAYS_EN.get(days_since.rem_euclid(7) as usize).copied().unwrap_or("Monday")
+    };
+    format_date_tokens(fmt, (hy, hm, hd), (hh, mm, ss), month, day, arabic)
+}
+
+fn format_date_tokens(fmt: &str, (y, m, d): (i64, usize, u32), (hh, mm, ss): (u32, u32, u32), month: &str, day: &str, arabic: bool) -> String {
     let mut out = String::new();
     let chars: Vec<char> = fmt.chars().collect();
     let mut i = 0;
@@ -109,7 +188,13 @@ pub fn format_date_parts(fmt: &str, y: i64, m: usize, d: u32, (hh, mm, ss): (u32
         }
         // `am/pm` (any case) is one token: AM or PM.
         if chars.get(i..i + 5).is_some_and(|w| w.iter().collect::<String>().eq_ignore_ascii_case("am/pm")) {
-            out.push_str(if hh < 12 { "AM" } else { "PM" });
+            out.push_str(if hh < 12 {
+                if arabic { "ص" } else { "AM" }
+            } else if arabic {
+                "م"
+            } else {
+                "PM"
+            });
             i += 5;
             continue;
         }
@@ -119,13 +204,13 @@ pub fn format_date_parts(fmt: &str, y: i64, m: usize, d: u32, (hh, mm, ss): (u32
         }
         match (c, n) {
             ('y' | 'Y', 4..) => out.push_str(&format!("{y:04}")),
-            ('y' | 'Y', _) => out.push_str(&format!("{:02}", y % 100)),
+            ('y' | 'Y', _) => out.push_str(&format!("{:02}", y.rem_euclid(100))),
             ('M', 4..) => out.push_str(month),
-            ('M', 3) => out.push_str(month.get(..3).unwrap_or(month)),
+            ('M', 3) => out.push_str(if arabic { month } else { month.get(..3).unwrap_or(month) }),
             ('M', 2) => out.push_str(&format!("{m:02}")),
             ('M', 1) => out.push_str(&m.to_string()),
             ('d' | 'D', 4..) => out.push_str(day),
-            ('d' | 'D', 3) => out.push_str(day.get(..3).unwrap_or(day)),
+            ('d' | 'D', 3) => out.push_str(if arabic { day } else { day.get(..3).unwrap_or(day) }),
             ('d' | 'D', 2) => out.push_str(&format!("{d:02}")),
             ('d' | 'D', 1) => out.push_str(&d.to_string()),
             ('H', 2..) => out.push_str(&format!("{hh:02}")),
@@ -136,7 +221,13 @@ pub fn format_date_parts(fmt: &str, y: i64, m: usize, d: u32, (hh, mm, ss): (u32
             ('m', _) => out.push_str(&mm.to_string()),
             ('s', 2..) => out.push_str(&format!("{ss:02}")),
             ('s', _) => out.push_str(&ss.to_string()),
-            ('a' | 'A', _) => out.push_str(if hh < 12 { "AM" } else { "PM" }),
+            ('a' | 'A', _) => out.push_str(if hh < 12 {
+                if arabic { "ص" } else { "AM" }
+            } else if arabic {
+                "م"
+            } else {
+                "PM"
+            }),
             _ => {
                 for _ in 0..n {
                     out.push(c);

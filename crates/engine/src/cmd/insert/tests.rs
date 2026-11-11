@@ -416,3 +416,28 @@ fn local_civil_date_follows_the_utc_offset() {
         assert!(crate::cmd::local_offset_secs(unix).abs() <= 26 * 3600);
     }
 }
+
+#[test]
+fn hijri_date_conversion_matches_microsoft_word() {
+    // 1970-01-01 (epoch, days = 0) -> 1389-10-23
+    assert_eq!(super::hijri_from_days(0), (1389, 10, 23));
+    // 2000-01-01 (days = 10957) -> 1420-09-25
+    assert_eq!(super::hijri_from_days(10957), (1420, 9, 25));
+    // 2026-11-11 (days = 20768) -> 1448-06-01
+    assert_eq!(super::hijri_from_days(20768), (1448, 6, 1));
+}
+
+#[test]
+fn hijri_date_formatting() {
+    // 2026-11-11 is 1448-06-01 (Wednesday)
+    let days = 20768;
+    let (hy, hm, hd) = super::hijri_from_days(days);
+    assert_eq!((hy, hm, hd), (1448, 6, 1));
+    // English transliteration matching Word
+    assert_eq!(super::format_date_hijri_parts("M/d/yyyy", hy, hm, hd, (0, 0, 0), days, false), "6/1/1448");
+    assert_eq!(super::format_date_hijri_parts("dd/MM/yyyy", hy, hm, hd, (0, 0, 0), days, false), "01/06/1448");
+    assert_eq!(super::format_date_hijri_parts("d MMMM yyyy", hy, hm, hd, (0, 0, 0), days, false), "1 Jamada El Thaniah 1448");
+    // Arabic formatting
+    assert_eq!(super::format_date_hijri_parts("d MMMM yyyy", hy, hm, hd, (0, 0, 0), days, true), "1 جمادى الآخرة 1448");
+    assert_eq!(super::format_date_hijri_parts("dddd d MMMM yyyy", hy, hm, hd, (0, 0, 0), days, true), "الأربعاء 1 جمادى الآخرة 1448");
+}
