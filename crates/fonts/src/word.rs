@@ -222,6 +222,8 @@ const METRIC_TWINS: &[&[&str]] = &[
     &["Calibri", "Carlito"],
     &["Cambria", "Caladea"],
     &["Palatino Linotype", "Palatino", "Book Antiqua", "TeX Gyre Pagella", "P052", "URW Palladio L", "Palladio"],
+    &["Traditional Arabic", "Noto Naskh Arabic", "Amiri"],
+    &["Simplified Arabic", "Noto Sans Arabic"],
 ];
 
 /// The fonts that measure like `family` ([`METRIC_TWINS`]), in the order they are tried, without
@@ -798,6 +800,9 @@ mod tests {
         assert!(metric_compatible(" arial ", "Liberation Sans"));
         assert!(metric_compatible("Arial CE", "Helvetica"));
         assert!(metric_compatible("Book Antiqua", "TeX Gyre Pagella"));
+        assert!(metric_compatible("Traditional Arabic", "Noto Naskh Arabic"));
+        assert!(metric_compatible("Traditional Arabic", "Amiri"));
+        assert!(metric_compatible("Simplified Arabic", "Noto Sans Arabic"));
         assert!(!metric_compatible("Calibri", "Helvetica Neue"));
         assert!(!metric_compatible("Open Sans", "Carlito"));
         assert!(!metric_compatible("Times New Roman", "Times"));
