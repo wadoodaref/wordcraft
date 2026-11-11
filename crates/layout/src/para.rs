@@ -60,6 +60,10 @@ pub struct ParaLayout {
     /// Sum of line heights (without space before/after).
     pub height: f32,
     pub text_len: usize,
+    /// The full text of the paragraph, when available.
+    pub text: Option<Arc<str>>,
+    /// Pre-allocated kashida elongation reserves for Medium/High justification: (cluster_index, reserve_width).
+    pub kashida_reserves: Vec<(usize, f32)>,
     /// Drawing segments that start inside a whole-paragraph grapheme/complex-script cluster.
     /// Font or run formatting can split the drawing, but cannot introduce an edit/wrap stop.
     joined_cluster_starts: Vec<usize>,

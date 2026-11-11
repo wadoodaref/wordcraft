@@ -4,7 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::props::{
-    Align, Border, Borders, CharProps, Highlight, LineSpacing, NumRef, ParaProps, Rgb, TabAlign, TabStop, TextColor, Underline, VertAlign,
+    Align, Border, Borders, CharProps, Highlight, JustifyStyle, LineSpacing, NumRef, ParaProps, Rgb, TabAlign, TabStop, TextColor, Underline,
+    VertAlign,
 };
 use crate::styles::{StyleKind, StyleSheet};
 
@@ -165,6 +166,8 @@ fn default_adjust_right_indent() -> bool {
 pub struct ResolvedPara {
     pub style: String,
     pub align: Align,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub justify_style: Option<JustifyStyle>,
     pub indent_left: f32,
     pub indent_right: f32,
     pub indent_first: f32,
@@ -260,6 +263,7 @@ impl ResolvedPara {
         ResolvedPara {
             style: style.to_string(),
             align: p.align.unwrap_or_default(),
+            justify_style: p.justify_style,
             indent_left: clampi(p.indent_left),
             indent_right: clampi(p.indent_right),
             indent_first: clampi(p.indent_first),

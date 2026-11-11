@@ -193,6 +193,8 @@ pub struct Line {
     pub vis: Vec<VisCl>,
     /// The paragraph reads right to left (its start edge is on the right).
     pub rtl: bool,
+    /// Kashida elongations applied to clusters: (cluster_index, elongation_width).
+    pub kashidas: Vec<(usize, f32)>,
 }
 
 /// Where a cluster of a bidirectional line is drawn.

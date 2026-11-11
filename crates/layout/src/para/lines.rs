@@ -1,10 +1,11 @@
 use super::bidi::{even_row, reorder_line};
 use super::grid::{Exclusion, Grid};
-use super::justify::{HYPHENATION_ZONE, hyphen_glyph, shrink_line_spaces, space_room};
+use super::justify::{HYPHENATION_ZONE, apply_kashida_justification, find_kashida_candidates, hyphen_glyph, shrink_line_spaces, space_room};
 use super::model::{ClKind, Cluster, Line, LineEnd, ParaEnv};
 use super::paragraph::word_widths;
 use super::tabs::{next_tab, pl_text_at, ptab_stop, resolve_tab};
 use super::{Align, Arc, Level, LevelSuffix, LineSpacing, MathJc, ParaLayout, TabAlign, TabLeader, TabStop, VecDeque, WrapText};
+use wordcraft_doc::props::JustifyStyle;
 
 /// Narrow cells and float spans must retain their usable width.
 const MIN_LINE_WIDTH: f32 = 1.0;
@@ -99,6 +100,8 @@ struct Scan {
     has_tab: bool,
     /// The first word doesn't fit a span narrowed by a floating object: it moves on whole.
     skip: bool,
+    /// Kashida elongations applied to clusters: (cluster_index, elongation_width).
+    kashidas: Vec<(usize, f32)>,
 }
 
 /// Whether anything but markers (a bookmark, say) is among the clusters `c0..j`: an empty line
@@ -283,6 +286,7 @@ impl<'e> Breaker<'e> {
             space_w: 0.0,
             has_tab: false,
             skip: false,
+            kashidas: Vec::new(),
         }
     }
 
@@ -372,6 +376,7 @@ impl<'e> Breaker<'e> {
             beside: sc.beside,
             vis: Vec::new(),
             rtl: self.rtl_para,
+            kashidas: sc.kashidas,
         };
         if self.bidi {
             reorder_line(pl, &mut line, self.width);
@@ -580,7 +585,7 @@ impl<'e> Breaker<'e> {
         if shrink {
             shrink_line_spaces(pl, &mut sc.xs, c0, c1, content_end, slack);
         } else if justify && slack > 0.0 {
-            justify_line(pl, &mut sc.xs, (c0, c1, align_from), (content_end, slack), rp.align == Align::Distribute);
+            sc.kashidas = justify_line(pl, &mut sc.xs, (c0, c1, align_from), (content_end, slack), rp.align == Align::Distribute, rp.justify_style);
         }
     }
 
@@ -644,6 +649,7 @@ impl<'e> Breaker<'e> {
             beside: false,
             vis: Vec::new(),
             rtl: self.rtl_para,
+            kashidas: Vec::new(),
         });
         self.top += h;
     }
@@ -729,7 +735,14 @@ fn content_end(pl: &ParaLayout, sc: &Scan, c1: usize) -> f32 {
 
 /// Stretch the line to its right edge: its spaces widen by `slack` between them, or all its
 /// clusters by an equal share when `distribute` (or there are no spaces).
-fn justify_line(pl: &ParaLayout, xs: &mut [f32], (c0, c1, align_from): (usize, usize, usize), (content_end, slack): (f32, f32), distribute: bool) {
+fn justify_line(
+    pl: &ParaLayout,
+    xs: &mut [f32],
+    (c0, c1, align_from): (usize, usize, usize),
+    (content_end, slack): (f32, f32),
+    distribute: bool,
+    style: Option<JustifyStyle>,
+) -> Vec<(usize, f32)> {
     // Spaces before the line's first character (after the last tab) keep their width, as in Word:
     // text indented with spaces stays where the spaces put it. Zero-width markers (a bookmark,
     // hidden text), floating objects' anchors and the break a line ends with don't count as a
@@ -741,10 +754,25 @@ fn justify_line(pl: &ParaLayout, xs: &mut [f32], (c0, c1, align_from): (usize, u
         })
     };
     let text_from = (align_from..c1).find(|k| !blank(*k)).unwrap_or(c1);
+
+    // Thai justification distributes across character gaps.
+    let distribute = distribute || style == Some(JustifyStyle::Thai);
+
     // Spaces inside the content.
     let spaces: Vec<usize> = (text_from..c1)
         .filter(|k| pl.clusters.get(*k).is_some_and(|c| c.kind == ClKind::Space) && xs.get(k - c0).copied().unwrap_or(f32::MAX) < content_end - 0.01)
         .collect();
+
+    if let Some(k_style) = style
+        && matches!(k_style, JustifyStyle::LowKashida | JustifyStyle::MediumKashida | JustifyStyle::HighKashida)
+        && let Some(text) = pl.text.as_ref()
+    {
+        let candidates = find_kashida_candidates(pl, text, (c0, c1, text_from), xs, content_end, k_style);
+        if !candidates.is_empty() {
+            return apply_kashida_justification(pl, xs, (c0, c1, text_from), &spaces, candidates, slack, k_style);
+        }
+    }
+
     if distribute || spaces.is_empty() {
         // Distributed across the gaps between the first and last characters: spaces hanging at
         // the line's end take none, so the last character reaches the margin.
@@ -757,7 +785,7 @@ fn justify_line(pl: &ParaLayout, xs: &mut [f32], (c0, c1, align_from): (usize, u
                 *v += per * k.min(cnt);
             }
         }
-        return;
+        return Vec::new();
     }
     let per = slack / spaces.len() as f32;
     let mut add = 0.0;
@@ -774,6 +802,7 @@ fn justify_line(pl: &ParaLayout, xs: &mut [f32], (c0, c1, align_from): (usize, u
     if let Some(v) = xs.last_mut() {
         *v += add;
     }
+    Vec::new()
 }
 
 impl Scan {

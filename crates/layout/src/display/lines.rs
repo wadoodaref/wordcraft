@@ -177,9 +177,49 @@ fn collect_glyph_run(
                     r.end = b;
                 }
             }
-            for g in cg {
-                glyphs.push((g.gid, cx + g.dx, base - st.shift - g.dy));
-                ranges.push(a..b);
+            let kashida_w = line.kashidas.iter().find(|(ci, _)| *ci == k).map(|(_, w)| *w).unwrap_or(0.0);
+            if kashida_w > 0.0 {
+                let tatweel_gid = st.face.glyph_for('\u{0640}');
+                let upem = st.face.upem.max(1.0) as f32;
+                let scale = st.rc.scale / 100.0;
+                let tatweel_adv = (st.face.advance(tatweel_gid) as f32 * (st.size / upem) * scale).max(0.5);
+                let n_tatweels = ((kashida_w / tatweel_adv).round() as usize).max(1);
+                let step = kashida_w / n_tatweels as f32;
+                let is_rtl = line.cl_rtl(k);
+                if is_rtl {
+                    let t_start = text.len();
+                    for _ in 0..n_tatweels {
+                        text.push('\u{0640}');
+                    }
+                    let t_end = text.len();
+                    for m in 0..n_tatweels {
+                        glyphs.push((tatweel_gid, cx + m as f32 * step, base - st.shift));
+                        ranges.push(t_start..t_end);
+                    }
+                    for g in cg {
+                        glyphs.push((g.gid, cx + kashida_w + g.dx, base - st.shift - g.dy));
+                        ranges.push(a..b);
+                    }
+                } else {
+                    for g in cg {
+                        glyphs.push((g.gid, cx + g.dx, base - st.shift - g.dy));
+                        ranges.push(a..b);
+                    }
+                    let t_start = text.len();
+                    for _ in 0..n_tatweels {
+                        text.push('\u{0640}');
+                    }
+                    let t_end = text.len();
+                    for m in 0..n_tatweels {
+                        glyphs.push((tatweel_gid, cx + c.adv + m as f32 * step, base - st.shift));
+                        ranges.push(t_start..t_end);
+                    }
+                }
+            } else {
+                for g in cg {
+                    glyphs.push((g.gid, cx + g.dx, base - st.shift - g.dy));
+                    ranges.push(a..b);
+                }
             }
         }
         k += 1;

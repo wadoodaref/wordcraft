@@ -826,3 +826,27 @@ fn rtl_paragraph_mark_and_list_label_use_complex_script() {
     let lab_style = &pl.styles[lab.style as usize];
     assert!(lab_style.rc.rtl || lab_style.rc.cs, "list label in an RTL paragraph inherits RTL/complex script formatting");
 }
+
+#[test]
+fn kashida_justification_inserts_tatweel_between_connecting_arabic_letters() {
+    use wordcraft_doc::props::JustifyStyle;
+    if arabic_face().is_none() {
+        eprintln!("skipped: no font with Persian/Arabic letters installed");
+        return;
+    }
+    let text = "بدلا من توسيع المسافات بين الكلمات، وهذا يعطي شكلا أجمل للفقرات العربية المضبوطة من الجانبين. نكرر النص لكي";
+    let mut d = doc_of(&[(text, true)]);
+    let at = Pos::body(0, 0);
+    d.format_paragraphs(&at, &at, &|p: &mut ParaProps| {
+        p.align = Some(Align::Justify);
+        p.justify_style = Some(JustifyStyle::LowKashida);
+    })
+    .unwrap();
+    let l = lay(&d);
+    let (pl, _) = first_line(&l, 0);
+    let line = pl.lines.first().unwrap();
+    assert!(!line.kashidas.is_empty(), "kashidas should be placed on justified Arabic line: {:?}", line.kashidas);
+    let draws = display::page_display(&d, &l.pages[0], &Default::default());
+    let has_tatweel = draws.iter().any(|d| if let display::Draw::Glyphs { text, .. } = d { text.contains('\u{0640}') } else { false });
+    assert!(has_tatweel, "Draw::Glyphs should contain tatweel U+0640 glyph");
+}
