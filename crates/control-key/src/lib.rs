@@ -12,6 +12,15 @@ pub fn settings_dir() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("WORDCRAFT_PROFILE_DIR").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(path));
     }
+    // Portable mode: if portable.txt or portable marker exists beside the executable,
+    // store preferences, recent files, logs, and dictionaries locally.
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+        && (exe_dir.join("portable.txt").exists() || exe_dir.join("portable").exists())
+    {
+        let data = exe_dir.join("data");
+        return Some(if data.exists() || std::fs::create_dir_all(&data).is_ok() { data } else { exe_dir.to_path_buf() });
+    }
     if cfg!(target_os = "macos") {
         std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/WordCraft"))
     } else if cfg!(windows) {
