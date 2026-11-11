@@ -21,6 +21,7 @@ mod heading_levels;
 mod justify_style;
 mod legacy_forms;
 mod ligatures;
+mod line_numbering;
 mod malformed;
 mod missing_pictures;
 mod nested_block_controls;

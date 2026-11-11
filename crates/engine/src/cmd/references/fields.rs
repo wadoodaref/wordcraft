@@ -378,10 +378,12 @@ pub fn update_fields_in(s: &mut Session, all: bool) -> Result<(), CmdError> {
             let name = wordcraft_layout::fields::field_name(instr);
             match name.as_str() {
                 "DATE" | "TIME" | "CREATEDATE" | "SAVEDATE" | "PRINTDATE" => {
-                    let pic = date_picture(instr).unwrap_or_else(|| if name == "TIME" { "h:mm am/pm".into() } else { "M/d/yyyy".into() });
+                    let lang = field_lang(&s.doc, p, k);
+                    let pic = date_picture(instr).unwrap_or_else(|| default_picture(&name, lang.as_deref()));
                     let hijri = has_switch(instr, 'h');
                     let text = if hijri {
                         let is_ar = s.doc.para(story, &path).is_some_and(|p| p.props.bidi == Some(true))
+                            || lang.as_deref().is_some_and(|l| l.starts_with("ar"))
                             || s.doc
                                 .para(story, &path)
                                 .and_then(|p| crate::cmd::para_lang(&s.doc, p))
@@ -391,7 +393,7 @@ pub fn update_fields_in(s: &mut Session, all: bool) -> Result<(), CmdError> {
                             || pic.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
                         crate::cmd::insert::format_date_hijri(&pic, is_ar)
                     } else {
-                        crate::cmd::insert::format_date(&pic)
+                        crate::cmd::insert::format_date_in(&pic, lang.as_deref())
                     };
                     updates.push((k, text_result(instr, text)));
                 }
@@ -519,15 +521,17 @@ pub fn refresh_date_fields(doc: &mut wordcraft_doc::Document) {
                     continue;
                 }
                 // Word's default picture when the code carries no `\@` switch.
-                let pic = date_picture(instr).unwrap_or_else(|| if name == "TIME" { "h:mm am/pm".into() } else { "M/d/yyyy".into() });
+                let lang = field_lang(doc, p, k);
+                let pic = date_picture(instr).unwrap_or_else(|| default_picture(&name, lang.as_deref()));
                 let hijri = has_switch(instr, 'h');
                 let text = if hijri {
                     let is_ar = p.props.bidi == Some(true)
+                        || lang.as_deref().is_some_and(|l| l.starts_with("ar"))
                         || crate::cmd::para_lang(doc, p).as_deref().is_some_and(|l| l.starts_with("ar"))
                         || pic.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
                     crate::cmd::insert::format_date_hijri(&pic, is_ar)
                 } else {
-                    crate::cmd::insert::format_date(&pic)
+                    crate::cmd::insert::format_date_in(&pic, lang.as_deref())
                 };
                 updates.push((k, text_result(instr, text)));
             }
@@ -545,6 +549,16 @@ pub fn refresh_date_fields(doc: &mut wordcraft_doc::Document) {
     }
 }
 
+/// Resolve a field object's language through the paragraph and document defaults.
+fn field_lang(doc: &wordcraft_doc::Document, p: &wordcraft_doc::Paragraph, k: usize) -> Option<String> {
+    let off = p.object_offsets().get(k).copied()?;
+    doc.styles.resolve_char(p.props.style.as_deref(), p.props_of_char(off)).lang
+}
+
+/// Word's default date or time picture when a field instruction carries no `\@` picture switch.
+fn default_picture(name: &str, lang: Option<&str>) -> String {
+    if name == "TIME" { "h:mm am/pm".into() } else { crate::cmd::insert::default_date_picture(lang).into() }
+}
 /// Most names SET fields give values.
 const MAX_SET: usize = 10_000;
 
