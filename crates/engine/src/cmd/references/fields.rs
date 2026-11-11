@@ -379,7 +379,21 @@ pub fn update_fields_in(s: &mut Session, all: bool) -> Result<(), CmdError> {
             match name.as_str() {
                 "DATE" | "TIME" | "CREATEDATE" | "SAVEDATE" | "PRINTDATE" => {
                     let pic = date_picture(instr).unwrap_or_else(|| if name == "TIME" { "h:mm am/pm".into() } else { "M/d/yyyy".into() });
-                    updates.push((k, text_result(instr, crate::cmd::insert::format_date(&pic))));
+                    let hijri = has_switch(instr, 'h');
+                    let text = if hijri {
+                        let is_ar = s.doc.para(story, &path).is_some_and(|p| p.props.bidi == Some(true))
+                            || s.doc
+                                .para(story, &path)
+                                .and_then(|p| crate::cmd::para_lang(&s.doc, p))
+                                .or_else(|| crate::cmd::default_lang(s))
+                                .as_deref()
+                                .is_some_and(|l| l.starts_with("ar"))
+                            || pic.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
+                        crate::cmd::insert::format_date_hijri(&pic, is_ar)
+                    } else {
+                        crate::cmd::insert::format_date(&pic)
+                    };
+                    updates.push((k, text_result(instr, text)));
                 }
                 "REF" | "PAGEREF" => {
                     let f = FieldCode::parse(instr);
@@ -506,7 +520,16 @@ pub fn refresh_date_fields(doc: &mut wordcraft_doc::Document) {
                 }
                 // Word's default picture when the code carries no `\@` switch.
                 let pic = date_picture(instr).unwrap_or_else(|| if name == "TIME" { "h:mm am/pm".into() } else { "M/d/yyyy".into() });
-                updates.push((k, text_result(instr, crate::cmd::insert::format_date(&pic))));
+                let hijri = has_switch(instr, 'h');
+                let text = if hijri {
+                    let is_ar = p.props.bidi == Some(true)
+                        || crate::cmd::para_lang(doc, p).as_deref().is_some_and(|l| l.starts_with("ar"))
+                        || pic.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
+                    crate::cmd::insert::format_date_hijri(&pic, is_ar)
+                } else {
+                    crate::cmd::insert::format_date(&pic)
+                };
+                updates.push((k, text_result(instr, text)));
             }
             if updates.is_empty() {
                 continue;

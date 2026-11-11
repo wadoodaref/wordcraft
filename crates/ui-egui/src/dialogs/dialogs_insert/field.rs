@@ -115,6 +115,8 @@ pub struct FieldForm {
     pub name: String,
     /// `\@` picture for date fields.
     pub date_format: String,
+    /// `\h` switch for Hijri / Lunar calendar.
+    pub hijri: bool,
     /// `\*` value for number fields (empty = none).
     pub number_format: String,
     /// Bookmark (REF, PAGEREF), sequence name (SEQ), merge field (MERGEFIELD) or style name
@@ -147,6 +149,7 @@ impl FieldForm {
             category: FIELD_CATEGORIES.first().copied().unwrap_or("(All)").to_string(),
             name: "DATE".into(),
             date_format: DATE_FORMATS.first().copied().unwrap_or("M/d/yyyy").to_string(),
+            hijri: false,
             number_format: String::new(),
             target: String::new(),
             preserve: true,
@@ -203,7 +206,14 @@ impl FieldForm {
         let mut s = self.name.clone();
         let target = self.target.trim();
         match field_kind(&self.name) {
-            FieldKind::Date if !self.date_format.trim().is_empty() => s.push_str(&format!(" \\@ \"{}\"", self.date_format.trim().replace('"', ""))),
+            FieldKind::Date => {
+                if !self.date_format.trim().is_empty() {
+                    s.push_str(&format!(" \\@ \"{}\"", self.date_format.trim().replace('"', "")));
+                }
+                if self.hijri {
+                    s.push_str(" \\h");
+                }
+            }
             FieldKind::Bookmark if !target.is_empty() => s.push_str(&format!(" {} \\h", target.split_whitespace().collect::<Vec<_>>().join("_"))),
             FieldKind::Sequence => s.push_str(&format!(
                 " {}",
@@ -337,10 +347,15 @@ fn field_options(ui: &mut Ui, f: &mut FieldForm, t: &Tokens) {
         FieldKind::Date => {
             ui.label(tl!("Date formats:"));
             ui.add(egui::TextEdit::singleline(&mut f.date_format).desired_width(f32::INFINITY));
+            ui.checkbox(&mut f.hijri, tl!("Hijri / Lunar calendar (\\h)"));
             egui::Frame::new().stroke(Stroke::new(1.0, t.border)).inner_margin(2.0).show(ui, |ui| {
                 egui::ScrollArea::vertical().id_salt("field_dates").max_height(170.0).auto_shrink([false, false]).show(ui, |ui| {
                     for pic in DATE_FORMATS {
-                        let sample = wordcraft_engine::cmd::insert::format_date(pic);
+                        let sample = if f.hijri {
+                            wordcraft_engine::cmd::insert::format_date_hijri(pic, crate::rtl::on())
+                        } else {
+                            wordcraft_engine::cmd::insert::format_date(pic)
+                        };
                         if ui.selectable_label(f.date_format == *pic, sample).on_hover_text(*pic).clicked() {
                             f.date_format = (*pic).to_string();
                         }
